@@ -52,11 +52,17 @@ final class Lights: ObservableObject {
     @Published var brightness: Double {
         didSet { UserDefaults.standard.set(brightness, forKey: "brightness") }
     }
+    /// Speed of the current animation (or the wave), 1 = normal. Each effect keeps its own.
+    @Published private(set) var speed = 1.0
+
+    static let speedRange = 0.25...4.0
 
     private let usb = DispatchQueue(label: "ornata.usb")
     private var animation: Thread?
     private var animationCancelled = false
+    private var animationSpeed = 1.0
     private let animationLock = NSLock()
+    private var speeds = UserDefaults.standard.dictionary(forKey: "speeds") as? [String: Double] ?? [:]
 
     init() {
         brightness = UserDefaults.standard.object(forKey: "brightness") as? Double ?? 100
@@ -71,13 +77,43 @@ final class Lights: ObservableObject {
         return nil
     }
 
+    /// What the speed control applies to right now, if anything.
+    private var speedKey: String? {
+        switch mode {
+        case .animation(let id): return id
+        case .wave: return "wave"
+        default: return nil
+        }
+    }
+
+    var canChangeSpeed: Bool { speedKey != nil }
+
+    func setSpeed(_ value: Double) {
+        guard let key = speedKey else { return }
+        let value = min(Self.speedRange.upperBound, max(Self.speedRange.lowerBound, value))
+        speed = value
+        speeds[key] = value
+        UserDefaults.standard.set(speeds, forKey: "speeds")
+        if case .wave = mode {
+            send(Razer.wave(leftward: false, speed: value))
+        } else {
+            animationLock.lock()
+            animationSpeed = value
+            animationLock.unlock()
+        }
+    }
+
     func apply(_ newMode: Mode) {
         stopAnimation()
         mode = newMode
         if let data = try? JSONEncoder().encode(newMode) { UserDefaults.standard.set(data, forKey: "mode") }
-        if case .animation(let id) = newMode, let info = Effects.info(id) {
-            startAnimation(info.make())
-        } else {
+        speed = speedKey.flatMap { speeds[$0] } ?? 1
+        switch newMode {
+        case .animation(let id):
+            if let info = Effects.info(id) { startAnimation(info.make()) }
+        case .wave:
+            send(Razer.wave(leftward: false, speed: speed))
+        default:
             send(newMode.packets)
         }
     }
@@ -120,18 +156,45 @@ final class Lights: ObservableObject {
         return true
     }
 
+    /// Mixes two frames; t = 0 gives `a`, t = 1 gives `b`.
+    private static func blend(_ a: Grid, _ b: Grid, _ t: Double) -> Grid {
+        if t <= 0 { return a }
+        return zip(a, b).map { rowA, rowB in
+            zip(rowA, rowB).map { x, y in
+                RGB(Double(x.r) + (Double(y.r) - Double(x.r)) * t,
+                    Double(x.g) + (Double(y.g) - Double(x.g)) * t,
+                    Double(x.b) + (Double(y.b) - Double(x.b)) * t)
+            }
+        }
+    }
+
     private func startAnimation(_ effect: Effect) {
         animationLock.lock()
         animationCancelled = false
+        animationSpeed = speed
         animationLock.unlock()
         let thread = Thread { [weak self] in
             var failures = 0
+            // Speed works on any effect without changing it: each sent frame moves the effect
+            // forward by `speed` steps. Faster runs several steps per frame; slower shows
+            // blends between two steps, so slow motion stays smooth.
+            var current = effect.next()
+            var upcoming = effect.next()
+            var progress = 0.0
             while let self {
                 self.animationLock.lock()
                 let cancelled = self.animationCancelled
+                let speed = self.animationSpeed
                 self.animationLock.unlock()
                 if cancelled { break }
-                let ok = self.usb.sync { Self.write(Razer.frame(effect.next())) }
+                progress += speed
+                while progress >= 1 {
+                    current = upcoming
+                    upcoming = effect.next()
+                    progress -= 1
+                }
+                let frame = Self.blend(current, upcoming, progress)
+                let ok = self.usb.sync { Self.write(Razer.frame(frame)) }
                 if ok {
                     if failures > 0 { DispatchQueue.main.async { self.connected = true } }
                     failures = 0

@@ -6,6 +6,7 @@ A small native macOS menu bar app for the lighting on a **Razer Ornata V2** keyb
 
 - 24 live per-key animations: rainbow, rain, fire, aurora, plasma, snake, tetris, pong, fireworks, a clock, a CPU meter and more
 - Effects stored in the keyboard itself: solid colour, gradient, breathing, light-up-as-you-type, spectrum, wave
+- A speed control from ¼× to 4× that each animation (and the wave) remembers separately
 - Brightness, start at login, and it restores the last effect when it starts
 
 ## Build
@@ -27,6 +28,8 @@ Every command is a 90-byte HID feature report (`SET_REPORT`) sent to USB interfa
 macOS won't let an app open a keyboard's HID interfaces, so `OrnataUSB.c` sends the report as a USB control request to the device through IOKit instead. That needs no permissions and no drivers, the same trick as [Razer macOS](https://github.com/1kc/razer-macos).
 
 The keyboard drops packets sent back to back, so there's a 5 ms pause after each one. A per-key frame is 7 packets, so animations run at about 28 fps.
+
+Speed doesn't change that frame rate. Instead each frame moves the effect forward by `speed` steps: above 1× it takes several steps per frame, and below 1× it blends between two consecutive steps, so slow motion stays smooth without each effect knowing about speed (`Lights.startAnimation`).
 
 | File | What it does |
 | --- | --- |

@@ -22,7 +22,10 @@ struct ControlPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            section("Animations") { animationGrid }
+            section("Animations") {
+                animationGrid
+                speedControl
+            }
             section("Saved to keyboard") { savedEffects }
             section("Brightness") { brightness }
             footer
@@ -78,6 +81,32 @@ struct ControlPanel: View {
                 .help(active ? "Click to stop" : info.subtitle.capitalized)
             }
         }
+    }
+
+    /// Logarithmic, so ½× and 2× sit the same distance either side of normal.
+    private var speedControl: some View {
+        HStack {
+            Image(systemName: "tortoise").foregroundStyle(.secondary).help("Slower")
+            Slider(
+                value: Binding(get: { log2(lights.speed) }, set: { lights.setSpeed(pow(2, $0)) }),
+                in: log2(Lights.speedRange.lowerBound)...log2(Lights.speedRange.upperBound)
+            ) {
+                EmptyView()
+            } onEditingChanged: { editing in
+                // Snap back to exactly 1× when released close to it.
+                if !editing, abs(log2(lights.speed)) < 0.12 { lights.setSpeed(1) }
+            }
+            .tint(razerGreen)
+            Image(systemName: "hare").foregroundStyle(.secondary).help("Faster")
+            Text(speedLabel).font(.callout.monospacedDigit()).frame(width: 40, alignment: .trailing)
+        }
+        .disabled(!lights.canChangeSpeed)
+        .opacity(lights.canChangeSpeed ? 1 : 0.45)
+        .help(lights.canChangeSpeed ? "Speed of the current effect" : "Pick an animation (or Wave) to change its speed")
+    }
+
+    private var speedLabel: String {
+        String(format: "%.2g×", lights.speed)  // 0.25×, 0.5×, 1×, 1.5×, 4×
     }
 
     // MARK: Saved effects

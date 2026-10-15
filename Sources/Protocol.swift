@@ -67,7 +67,11 @@ enum Razer {
     static func breathing(_ c: RGB) -> [[UInt8]] { [effect(0x02, [1, 0, 1, c.r, c.g, c.b])] }
     static func breathing(_ a: RGB, _ b: RGB) -> [[UInt8]] { [effect(0x02, [2, 0, 2, a.r, a.g, a.b, b.r, b.g, b.b])] }
     static func spectrum() -> [[UInt8]] { [effect(0x03, [0, 0, 0])] }
-    static func wave(leftward: Bool) -> [[UInt8]] { [effect(0x04, [leftward ? 2 : 1, 0x28, 0])] }
+    /// The wave's speed byte is a delay: 0x28 is normal, lower is faster.
+    static func wave(leftward: Bool, speed: Double = 1) -> [[UInt8]] {
+        let delay = UInt8(max(0x08, min(0xA0, (40 / speed).rounded())))
+        return [effect(0x04, [leftward ? 2 : 1, delay, 0])]
+    }
     /// Keys light up when pressed and fade; speed 1 (fast fade) ... 4 (slow).
     static func reactive(_ c: RGB, speed: UInt8) -> [[UInt8]] { [effect(0x05, [0, max(1, min(4, speed)), 1, c.r, c.g, c.b])] }
     static func off() -> [[UInt8]] { [effect(0x00, [0, 0, 0])] }
