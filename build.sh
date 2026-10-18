@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 BUILD=build
 APP="$BUILD/Lumikey.app"
 DEST="$HOME/Applications/Lumikey.app"
-VERSION=${VERSION:-2.1}
+VERSION=${VERSION:-0.1}
 INSTALL=1
 [ "$1" = "--no-install" ] && INSTALL=0
 

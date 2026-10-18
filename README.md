@@ -122,7 +122,7 @@ scripts/make-demo.sh                                   # docs/demo.mp4 and docs/
 Push a version tag. GitHub Actions builds a universal app and attaches it to a new release:
 
 ```sh
-git tag v2.1 && git push origin v2.1
+git tag v0.1 && git push origin v0.1
 ```
 
 ## Support the project

@@ -1,4 +1,4 @@
-# Builds the app on every push and pull request. Pushing a tag like v2.1 also publishes
+# Builds the app on every push and pull request. Pushing a tag like v0.1 also publishes
 # a GitHub release with the zipped app attached.
 name: Build
 
