@@ -8,6 +8,7 @@ private let presets: [String] = ["ff0000", "ff7a00", "ffe600", "44d62c", "00c8ff
 struct ControlPanel: View {
     @ObservedObject var lights: Lights
     var onOpenWindow: (() -> Void)?
+    var onTest: () -> Void
 
     @AppStorage("solid") private var solid = "44d62c"
     @AppStorage("gradientA") private var gradientA = "ff0080"
@@ -22,6 +23,7 @@ struct ControlPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
+            notice
             section("Animations") {
                 animationGrid
                 speedControl
@@ -38,16 +40,54 @@ struct ControlPanel: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("Ornata ").font(.headline) + Text("Lights").font(.headline).foregroundColor(razerGreen)
+            Text("Lumi").font(.headline) + Text("key").font(.headline).foregroundColor(razerGreen)
             Spacer()
-            if !lights.connected {
-                Label("Keyboard not connected", systemImage: "exclamationmark.triangle.fill")
+            if lights.testing != nil {
+                Text("Testing keyboard…").font(.caption).foregroundStyle(.secondary)
+            } else if !lights.connected {
+                Label(lights.keyboard == nil ? "No keyboard found" : "Keyboard not responding",
+                      systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.orange)
             } else {
                 Text(lights.mode.map { lights.playingAnimation != nil ? "Playing \($0.label.lowercased())" : $0.label } ?? "Ready")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Explains a keyboard the app can't (or isn't sure it can) drive.
+    @ViewBuilder private var notice: some View {
+        switch lights.detection {
+        case .untested(let keyboard):
+            noticeBox {
+                Text("Found a **\(keyboard.name)**. It should work, but nobody has tried it with this app yet.")
+                HStack {
+                    Button("Use it anyway") { lights.allowUntested = true }
+                    Button("Test it…", action: onTest)
+                }
+            }
+        case .unsupported(let devices):
+            noticeBox {
+                Text("This app doesn't support \(ListFormatter.localizedString(byJoining: devices.map(\.name))) yet.")
+                Button("Send a report…", action: onTest)
+            }
+        case .ready(let keyboard) where !keyboard.verified && lights.testing == nil:
+            noticeBox {
+                Text("**\(keyboard.name)** support is experimental. If you run the test, the next version can mark it as working.")
+                Button("Test it…", action: onTest)
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private func noticeBox<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8, content: content)
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -214,6 +254,12 @@ struct ControlPanel: View {
             if let loginError {
                 Text(loginError).font(.caption).foregroundStyle(.orange)
             }
+            HStack {
+                Button("Test keyboard…", action: onTest).buttonStyle(.link)
+                Spacer()
+                Link("About", destination: Project.repo)
+            }
+            .font(.caption)
         }
     }
 
